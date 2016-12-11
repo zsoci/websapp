@@ -1,0 +1,15 @@
+{application, cfa, [
+	{description, "cfa CSI service"},
+	{vsn, "0.0.1"},
+	{id, "git"},
+	{modules, []},
+	{registered, []},
+	{applications, [
+		csi,
+		compiler,
+		kernel,
+		stdlib
+	]},
+	{env, []},
+  {mod, { cfa_app, []}}
+]}.
