@@ -29,7 +29,8 @@
 init_service(_InitArgs) ->
   TransOpts = application:get_env(cfa, trans_opts, [{port, 8082}]),
   Acceptors = application:get_env(cfa, acceptors, ?DEFAULT_NR_OF_ACCEPTORS ),
-  State = #cfa_state{trail_handlers = [ cowboy_swagger_handler ],
+  State = #cfa_state{trail_handlers = [ cowboy_swagger_handler,
+                                        cfa_healthcheck_handler],
                      pure_handlers = dict:new(),
                      middlewares = [
                        cowboy_router,
@@ -73,6 +74,7 @@ update_routes(State = #cfa_state{trail_handlers = TrailHandlers,
                                  nr_of_acceptors = Acceptors
   }) ->
   TrailRoutes = trails:trails([?MODULE | TrailHandlers]),
+  trails:store(TrailRoutes),
   Dispatch = trails:single_host_compile(TrailRoutes),
   ProtoOpts = [{env, [{dispatch, Dispatch} | Env]},
                {middlewares, Middlewares}],
