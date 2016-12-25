@@ -8,7 +8,9 @@
 		csi,
 		compiler,
 		kernel,
-		stdlib
+		stdlib,
+		cowboy,
+		cowboy_swagger
 	]},
 	{env, []},
   {mod, { cfa_app, []}}
