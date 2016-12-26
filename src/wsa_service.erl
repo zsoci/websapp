@@ -70,11 +70,8 @@ update_routes({App, Routes}, State = #wsa_state{trail_handlers = TrailHandlers,
                                                 env            = Env}) ->
   NewPureHandlers = dict:store(App, Routes, PureHandlers),
   Values = set_routes(TrailHandlers, NewPureHandlers, Middlewares, Env),
-  {lists:foreach(fun({Key, Value}) ->
-                   cowboy:set_env(?WSA_SERVER_REF, Key, Value)
-                 end,
-                 Values),
-   State}.
+  ranch:set_protocol_options(?WSA_SERVER_REF, Values),
+  {ok, State#wsa_state{pure_handlers = NewPureHandlers}}.
 
 start_server(State = #wsa_state{trail_handlers  = TrailHandlers,
                                 pure_handlers   = PureHandlers,
@@ -97,41 +94,6 @@ set_routes(TrailDict, PureDict, Middlewares, Env) ->
   TrailRoutes = trails:trails([?MODULE | TrailHandlers]),
   trails:store(TrailRoutes),
   Dispatch = trails:single_host_compile(TrailRoutes),
-%%  [{'_',[],
-%%    [{[<<"ping">>],
-%%      [],ctr_healthcheck_handler,
-%%      #{function => login,
-%%        model => zsocimodel,
-%%        path => "/ping",
-%%        verbose => false}},
-%%     {[<<"api-docs">>],
-%%      [],cowboy_swagger_redirect_handler,
-%%      {file,
-%%       "/Users/zsoci/Projects/hive/PubSubHub/newrestctr/_build/default/lib/cowboy_swagger/priv/swagger/index.html"}},
-%%     {[<<"api-docs">>,<<"swagger.json">>],
-%%      [],cowboy_swagger_json_handler,#{}},
-%%     {[<<"api-docs">>,'...'],
-%%      [],cowboy_static,
-%%      {dir,
-%%       "/Users/zsoci/Projects/hive/PubSubHub/newrestctr/_build/default/lib/cowboy_swagger/priv/swagger",
-%%       [{mimetypes,cow_mimetypes,all}]}},
-%%     {[],[],cfa_healthcheck_handler,
-%%      #{path => "/",verbose => true}}]}],
-%%
-%%
-%%  [{'_',[],
-%%    [{[<<"favicon.ico">>],
-%%      [],cowboy_static,
-%%      {priv_file,ctr,"favicon.ico"}},
-%%     {'_',[],ctr_rest_handler,[]}]}],
-%%  D2 =cowboy_router:compile([
-%%                                              {'_', [
-%%                                                {"/favicon.ico", cowboy_static, {priv_file, ctr, "favicon.ico"}},
-%%
-%%
-%%                                                {'_', ctr_rest_handler, []}]}]),
-%%  ct:pal("(zsoci) ~p(~p): {Dispatch}:~p",
-%%         [?MODULE, ?LINE, {D2}]),
   [{env, [{dispatch, Dispatch} | Env]}, {middlewares, Middlewares}].
   
 -spec trails() -> trails:trails().
@@ -166,7 +128,9 @@ make_a_trail(Name, {Path, Module, _Options}) ->
   MethodData =
     #{ tags => [Name ++ " (application)"],
        description => Name ++ " is missing swagger definition",
-       parameters => [RequestBody]
+       parameters => [RequestBody],
+       produces => ["application/text"],
+       consumes => ["application/text"]
     },
   Metadata =
     #{
