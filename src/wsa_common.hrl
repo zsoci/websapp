@@ -17,6 +17,9 @@
 %%-define(APPLICATION_JSON, <<"application/json">>).
 %%
 
+-define(SERVICE_NAME, wsa_service).
+-define(SERVICE_MODULE, wsa_service).
+
 -type options() :: #{path => string(),
                      model => module(),
                      verbose => boolean()

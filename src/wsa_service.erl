@@ -1,19 +1,19 @@
--module(cfa_service).
+-module(wsa_service).
 -behaviour(csi_server).
 
 -include_lib("common_test/include/ct.hrl").
 
 %% General state of the service
--record(cfa_state, {trail_handlers :: list(atom()),
+-record(wsa_state, {trail_handlers :: list(atom()),
                     pure_handlers :: dict:dict(),
                     middlewares :: list(atom()),
                     env :: proplists:proplist(),
                     trans_opts :: proplists:proplist(),
                     nr_of_acceptors :: pos_integer()
-                   }).
+}).
 
 %% Lifecycle State for every requests'
--record(cfa_session_state, {cfa_state :: #cfa_state{}}).
+-record(wsa_session_state, {wsa_state :: #wsa_state{}}).
 
 -export([init_service/1,
          init/2,
@@ -23,32 +23,32 @@
 
 -export([trails/0,
          get_handlers/2,
-         add_routes/2]).
+         update_routes/2]).
 
 -define(DEFAULT_NR_OF_ACCEPTORS, 5).
--define(CFA_SERVER_REF, cfa_server).
+-define(WSA_SERVER_REF, wsa_server).
 %% ====================================================================
 %% Behavioural functions
 %% ====================================================================
 init_service(_InitArgs) ->
-  TransOpts = application:get_env(cfa, trans_opts, [{port, 8082}]),
-  Acceptors = application:get_env(cfa, acceptors, ?DEFAULT_NR_OF_ACCEPTORS ),
-  TrailHandlers = dict:store(cfa, [ cowboy_swagger_handler,
-                                    cfa_healthcheck_handler ], dict:new()),
-  State = #cfa_state{trail_handlers = TrailHandlers,
-                     pure_handlers = dict:new(),
-                     middlewares = [
+  TransOpts = application:get_env(wsa, trans_opts, [{port, 8082}]),
+  Acceptors = application:get_env(wsa, acceptors, ?DEFAULT_NR_OF_ACCEPTORS ),
+  TrailHandlers = dict:store(wsa, [ cowboy_swagger_handler,
+                                    wsa_healthcheck_handler ], dict:new()),
+  State = #wsa_state{trail_handlers  = TrailHandlers,
+                     pure_handlers   = dict:new(),
+                     middlewares     = [
                        cowboy_router,
                        cowboy_handler
                      ],
-                     env = [{compress, true}],
-                     trans_opts = TransOpts,
+                     env             = [{compress, true}],
+                     trans_opts      = TransOpts,
                      nr_of_acceptors = Acceptors
-    },
+  },
   {ok, start_server(State)}.
 
 init(_Args, ServiceState) ->
-  {ok, #cfa_session_state{cfa_state = ServiceState}}.
+  {ok, #wsa_session_state{wsa_state = ServiceState}}.
 
 terminate(_Reason, _State) ->
   ok.
@@ -59,31 +59,31 @@ terminate_service(_Reason, _State) ->
 %% ====================================================================
 %% Service functions
 %% ====================================================================
-get_handlers(all, State = #cfa_session_state{cfa_state = CfaState}) ->
-  {[{trail_handlers, dict:to_list(CfaState#cfa_state.trail_handlers)},
-    {cowboy_handlers, dict:to_list(CfaState#cfa_state.pure_handlers)}],
+get_handlers(all, State = #wsa_session_state{wsa_state = WsaState}) ->
+  {[{trail_handlers, dict:to_list(WsaState#wsa_state.trail_handlers)},
+    {cowboy_handlers, dict:to_list(WsaState#wsa_state.pure_handlers)}],
    State}.
 
-add_routes({App, Routes}, State = #cfa_state{trail_handlers  = TrailHandlers,
-                                             pure_handlers   = PureHandlers,
-                                             middlewares     = Middlewares,
-                                             env             = Env}) ->
+update_routes({App, Routes}, State = #wsa_state{trail_handlers = TrailHandlers,
+                                                pure_handlers  = PureHandlers,
+                                                middlewares    = Middlewares,
+                                                env            = Env}) ->
   NewPureHandlers = dict:store(App, Routes, PureHandlers),
   Values = set_routes(TrailHandlers, NewPureHandlers, Middlewares, Env),
   {lists:foreach(fun({Key, Value}) ->
-                   cowboy:set_env(?CFA_SERVER_REF, Key, Value)
+                   cowboy:set_env(?WSA_SERVER_REF, Key, Value)
                  end,
                  Values),
    State}.
 
-start_server(State = #cfa_state{trail_handlers  = TrailHandlers,
+start_server(State = #wsa_state{trail_handlers  = TrailHandlers,
                                 pure_handlers   = PureHandlers,
                                 middlewares     = Middlewares,
                                 env             = Env,
                                 trans_opts      = TransOpts,
                                 nr_of_acceptors = Acceptors}) ->
   ProtoOpts = set_routes(TrailHandlers, PureHandlers, Middlewares, Env),
-  case cowboy:start_http(?CFA_SERVER_REF, Acceptors, TransOpts, ProtoOpts) of
+  case cowboy:start_http(?WSA_SERVER_REF, Acceptors, TransOpts, ProtoOpts) of
     {ok, _} -> ok;
     {error, {already_started, _}} -> ok
   end,
@@ -95,10 +95,43 @@ set_routes(TrailDict, PureDict, Middlewares, Env) ->
                                Value ++ AccIn
                              end, [], TrailDict),
   TrailRoutes = trails:trails([?MODULE | TrailHandlers]),
-  ct:pal("(zsoci) ~p(~p): {TrailRoutes}:~p",
-        [?MODULE, ?LINE, {TrailRoutes}]),
   trails:store(TrailRoutes),
   Dispatch = trails:single_host_compile(TrailRoutes),
+%%  [{'_',[],
+%%    [{[<<"ping">>],
+%%      [],ctr_healthcheck_handler,
+%%      #{function => login,
+%%        model => zsocimodel,
+%%        path => "/ping",
+%%        verbose => false}},
+%%     {[<<"api-docs">>],
+%%      [],cowboy_swagger_redirect_handler,
+%%      {file,
+%%       "/Users/zsoci/Projects/hive/PubSubHub/newrestctr/_build/default/lib/cowboy_swagger/priv/swagger/index.html"}},
+%%     {[<<"api-docs">>,<<"swagger.json">>],
+%%      [],cowboy_swagger_json_handler,#{}},
+%%     {[<<"api-docs">>,'...'],
+%%      [],cowboy_static,
+%%      {dir,
+%%       "/Users/zsoci/Projects/hive/PubSubHub/newrestctr/_build/default/lib/cowboy_swagger/priv/swagger",
+%%       [{mimetypes,cow_mimetypes,all}]}},
+%%     {[],[],cfa_healthcheck_handler,
+%%      #{path => "/",verbose => true}}]}],
+%%
+%%
+%%  [{'_',[],
+%%    [{[<<"favicon.ico">>],
+%%      [],cowboy_static,
+%%      {priv_file,ctr,"favicon.ico"}},
+%%     {'_',[],ctr_rest_handler,[]}]}],
+%%  D2 =cowboy_router:compile([
+%%                                              {'_', [
+%%                                                {"/favicon.ico", cowboy_static, {priv_file, ctr, "favicon.ico"}},
+%%
+%%
+%%                                                {'_', ctr_rest_handler, []}]}]),
+%%  ct:pal("(zsoci) ~p(~p): {Dispatch}:~p",
+%%         [?MODULE, ?LINE, {D2}]),
   [{env, [{dispatch, Dispatch} | Env]}, {middlewares, Middlewares}].
   
 -spec trails() -> trails:trails().

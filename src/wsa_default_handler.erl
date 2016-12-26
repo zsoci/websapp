@@ -6,10 +6,10 @@
 %%% @end
 %%% Created : 25. Dec 2016 7:05 PM
 %%%-------------------------------------------------------------------
--module(cfa_default_handler).
+-module(wsa_default_handler).
 -author("zsoci").
 
--include("cfa_common.hrl").
+-include("wsa_common.hrl").
 
 -export([ init/3,
           rest_init/2,

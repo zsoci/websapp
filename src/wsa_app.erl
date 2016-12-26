@@ -1,11 +1,11 @@
--module(cfa_app).
+-module(wsa_app).
 -behaviour(application).
 
 -export([start/2]).
 -export([stop/1]).
 
 start(_Type, _Args) ->
-    cfa_sup:start_link().
+    wsa_sup:start_link().
 
 stop(_State) ->
     ok.

@@ -6,17 +6,17 @@
 %%% @end
 %%% Created : 25. Dec 2016 7:03 PM
 %%%-------------------------------------------------------------------
--module(cfa_healthcheck_handler).
+-module(wsa_healthcheck_handler).
 -author("zsoci").
 -behaviour(trails_handler).
 
--include("cfa_common.hrl").
+-include("wsa_common.hrl").
 %% ====================================================================
 %% API functions
 %% ====================================================================
 -include_lib("mixer/include/mixer.hrl").
 
--mixin([{ cfa_default_handler,
+-mixin([{ wsa_default_handler,
           [ init/3,
             rest_init/2,
             allowed_methods/2,

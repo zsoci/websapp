@@ -1,5 +1,5 @@
-{application, cfa, [
-	{description, "cfa CSI service"},
+{application, wsa, [
+	{description, "Web Service Applciation"},
 	{vsn, "0.0.1"},
 	{id, "git"},
 	{modules, []},
@@ -13,5 +13,5 @@
 		cowboy_swagger
 	]},
 	{env, []},
-  {mod, { cfa_app, []}}
+  {mod, { wsa_app, []}}
 ]}.
