@@ -129,8 +129,8 @@ make_a_trail(Name, {Path, Module, _Options}) ->
     #{ tags => [Name ++ " (application)"],
        description => Name ++ " is missing swagger definition",
        parameters => [RequestBody],
-       produces => ["application/text"],
-       consumes => ["application/text"]
+       produces => ["text/html"],
+       consumes => ["text/html"]
     },
   Metadata =
     #{
