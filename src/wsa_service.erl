@@ -1,6 +1,6 @@
 -module(wsa_service).
 -behaviour(csi_server).
-
+-compile({parse_transform, lager_transform}).
 -include_lib("common_test/include/ct.hrl").
 
 %% General state of the service
@@ -25,8 +25,12 @@
          get_handlers/2,
          update_routes/2]).
 
+-export([reset_test/0]).
+
 -define(DEFAULT_NR_OF_ACCEPTORS, 5).
 -define(WSA_SERVER_REF, wsa_server).
+-define(DEFAULT_MEDIA_TYPES, ["application/json"]).
+-define(DEFAULT_METHODS, [<<"GET">>]).
 %% ====================================================================
 %% Behavioural functions
 %% ====================================================================
@@ -70,6 +74,8 @@ update_routes({App, Routes}, State = #wsa_state{trail_handlers = TrailHandlers,
                                                 env            = Env}) ->
   NewPureHandlers = dict:store(App, Routes, PureHandlers),
   Values = set_routes(TrailHandlers, NewPureHandlers, Middlewares, Env),
+  ct:pal("(zsoci) ~p(~p): {Values}:~p",
+        [?MODULE, ?LINE, {Values}]),
   ranch:set_protocol_options(?WSA_SERVER_REF, Values),
   {ok, State#wsa_state{pure_handlers = NewPureHandlers}}.
 
@@ -125,17 +131,20 @@ make_a_trail(Name, {Path, Module, _Options}) ->
        #{ type => string
        }
     },
+  Produces = try_get_content_types(fun Module:content_types_provided/2),
+  Consumes = try_get_content_types(fun Module:content_types_accepted/2),
   MethodData =
     #{ tags => [Name ++ " (application)"],
        description => Name ++ " is missing swagger definition",
        parameters => [RequestBody],
-       produces => ["text/html"],
-       consumes => ["text/html"]
+       produces => Produces,
+       consumes => Consumes
     },
-  Metadata =
-    #{
-       get => MethodData
-    },
+  Methods = try_get_methods(fun Module:allowed_methods/2),
+  Metadata = lists:foldl(fun(Elem, AccIn) ->
+                            maps:put(wsa_util:method_to_atom(Elem),
+                                     MethodData, AccIn)
+                         end, #{}, Methods),
   Opts = #{ path => Path,
             model => zsocimodel,
             verbose => false,
@@ -148,3 +157,30 @@ handle_call({Request, Args}, _From, State) ->
              [{Request, Args}]),
   {Reply, NewState} = ?MODULE:Request(Args, State),
   {reply, Reply, NewState}.
+
+try_get_content_types(Fun) ->
+  try Fun(undef, undef) of
+    {ContentList, _, _} ->
+      [ (<< MediaType/binary, "/", SubType/binary >>)
+        || {{MediaType, SubType, _}, _} <- ContentList];
+    _ ->
+      ?DEFAULT_MEDIA_TYPES
+  catch
+      _:_ ->
+        ?DEFAULT_MEDIA_TYPES
+  end.
+
+try_get_methods(Fun) ->
+  try Fun(undef, undef) of
+    {Methods, _, _} ->
+      Methods;
+    _ ->
+      ?DEFAULT_METHODS
+  catch
+    _:_ ->
+      ?DEFAULT_METHODS
+  end.
+
+reset_test() ->
+  application:stop(ctr),
+  application:start(ctr).
