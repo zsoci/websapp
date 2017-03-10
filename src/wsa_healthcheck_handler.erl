@@ -49,7 +49,7 @@ handle_get(Req, State) ->
     true ->
       {<<"Pong">>, Req2, State};
     _ ->
-      {<<"">>, Req, State}
+      {<<"Ping">>, Req, State}
   end.
 
 -spec trails() -> trails:trails().
@@ -71,7 +71,7 @@ trails() ->
         parameters => [Parameter]
      }
   },
-  Path = "/",
+  Path = "/ping",
   Opts = #{ path => Path,
             verbose => true
   },
