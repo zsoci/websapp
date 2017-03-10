@@ -35,7 +35,9 @@
 %% Behavioural functions
 %% ====================================================================
 init_service(_InitArgs) ->
-  TransOpts = application:get_env(wsa, trans_opts, [{port, 8082}]),
+  Port = list_to_integer(application:get_env(wsa, listener_port, "8082")),
+  lager:error("Listening on port=~p", [Port]),
+  TransOpts = application:get_env(wsa, trans_opts, [{port, Port}]),
   Acceptors = application:get_env(wsa, acceptors, ?DEFAULT_NR_OF_ACCEPTORS ),
   TrailHandlers = dict:store(wsa, [ cowboy_swagger_handler,
                                     wsa_healthcheck_handler ], dict:new()),
@@ -74,8 +76,6 @@ update_routes({App, Routes}, State = #wsa_state{trail_handlers = TrailHandlers,
                                                 env            = Env}) ->
   NewPureHandlers = dict:store(App, Routes, PureHandlers),
   Values = set_routes(TrailHandlers, NewPureHandlers, Middlewares, Env),
-  ct:pal("(zsoci) ~p(~p): {Values}:~p",
-        [?MODULE, ?LINE, {Values}]),
   ranch:set_protocol_options(?WSA_SERVER_REF, Values),
   {ok, State#wsa_state{pure_handlers = NewPureHandlers}}.
 

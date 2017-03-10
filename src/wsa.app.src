@@ -10,6 +10,7 @@
 		kernel,
 		stdlib,
 		cowboy,
+		common_test,
 		cowboy_swagger
 	]},
 	{env, []},
