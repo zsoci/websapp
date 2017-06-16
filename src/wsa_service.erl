@@ -36,7 +36,7 @@
 init_service(_InitArgs) ->
   TransOpts = application:get_env(wsa, trans_opts, [{port, 8082}]),
   Acceptors = application:get_env(wsa, acceptors, ?DEFAULT_NR_OF_ACCEPTORS ),
-  TrailHandlers = dict:store(?WSA_SERVER_REF,
+  TrailHandlers = dict:store(wsa,
                              [ cowboy_swagger_handler
                              , wsa_healthcheck_handler
                              ],
