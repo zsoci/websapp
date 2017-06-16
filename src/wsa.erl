@@ -9,7 +9,8 @@
          start_link/0,
          stop/0]).
 
--export([get_handlers/0,
+-export([add_routes/3,
+         get_handlers/0,
          get_handlers/1,
          update_routes/1,
          update_routes/2]).
@@ -19,6 +20,9 @@ start() -> csi:start(?SERVICE_NAME, ?SERVICE_MODULE).
 start_link() -> csi:start_link(?SERVICE_NAME, ?SERVICE_MODULE).
 
 stop() -> csi:stop(?SERVICE_NAME).
+
+add_routes(Server, TrailRoutes, PureRoutes) ->
+  csi:call(?SERVICE_NAME, add_routes, {Server, TrailRoutes, PureRoutes}).
 
 get_handlers() ->
   get_handlers(all).
