@@ -10,6 +10,7 @@
          stop/0]).
 
 -export([get_handlers/0,
+         get_handlers/1,
          update_routes/1,
          update_routes/2]).
 
@@ -19,7 +20,11 @@ start_link() -> csi:start_link(?SERVICE_NAME, ?SERVICE_MODULE).
 
 stop() -> csi:stop(?SERVICE_NAME).
 
-get_handlers() -> csi:call_s(?SERVICE_NAME, get_handlers, all).
+get_handlers() ->
+  get_handlers(all).
+
+get_handlers(Server) ->
+  csi:call_s(?SERVICE_NAME, get_handlers, Server).
 
 update_routes(Routes) ->
   case application:get_application() of
