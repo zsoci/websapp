@@ -9,7 +9,9 @@
          start_link/0,
          stop/0]).
 
--export([add_routes/3,
+-export([add_trail_handlers/1,
+         add_trail_handlers/2,
+         add_trail_handlers/3,
          get_handlers/0,
          get_handlers/1,
          update_routes/1,
@@ -21,8 +23,19 @@ start_link() -> csi:start_link(?SERVICE_NAME, ?SERVICE_MODULE).
 
 stop() -> csi:stop(?SERVICE_NAME).
 
-add_routes(Server, TrailRoutes, PureRoutes) ->
-  csi:call(?SERVICE_NAME, add_routes, {Server, TrailRoutes, PureRoutes}).
+add_trail_handlers(TrailHandlers) ->
+  case application:get_application() of
+    undefined ->
+      {error, app_not_defined};
+    {ok, App} ->
+      add_trail_handlers(TrailHandlers,App)
+    end.
+
+add_trail_handlers(TrailHandlers, App) ->
+  add_trail_handlers(TrailHandlers, App, ?WSA_SERVER_REF).
+
+add_trail_handlers(TrailHandlers, App, Server) ->
+  csi:call(?SERVICE_NAME, add_trail_handlers, {Server, App, TrailHandlers}).
 
 get_handlers() ->
   get_handlers(all).

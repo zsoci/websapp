@@ -24,7 +24,7 @@
          terminate_service/2,
          handle_call/3]).
 
--export([add_routes/2,
+-export([add_trail_handlers/2,
          trails/0,
          get_handlers/2,
          update_routes/2]).
@@ -69,19 +69,24 @@ get_handlers(all, State) ->
 get_handlers(Server, State) ->
   {dict:find(Server, State), State}.
 
-add_routes({Server, App, TrailModules, []}, ServiceState) ->
+add_trail_handlers({Server, App, TrailHandlers}, ServiceState) ->
   State = dict:fetch(Server, ServiceState),
   #wsa_server_state{trail_handlers = TrailHandlersDict,
                     pure_handlers  = PureHandlersDict,
                     middlewares    = Middlewares,
                     env            = Env} = State,
-  OldTrailModules = dict:fetch(App, TrailHandlersDict),
-  NewTModules = sets:to_list(sets:from_list(TrailModules ++ OldTrailModules)),
+  OldTrailModules = case dict:find(App, TrailHandlersDict) of
+                      error ->
+                        [];
+                      {ok, Value} ->
+                        Value
+                    end,
+  NewTModules = sets:to_list(sets:from_list(TrailHandlers ++ OldTrailModules)),
   NewTDict = dict:store(App, NewTModules, TrailHandlersDict),
   Values = set_routes(NewTDict, PureHandlersDict, Middlewares, Env),
   ranch:set_protocol_options(Server, Values),
-  {ok, dict:store(Server,
-                  State#wsa_server_state{ trail_handlers = NewTDict})}.
+  {ok, dict:store(Server, State#wsa_server_state{ trail_handlers = NewTDict},
+                  ServiceState)}.
 
 update_routes({Server, Routes}, ServiceState) ->
   State = dict:fetch(Server, ServiceState),

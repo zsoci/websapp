@@ -75,8 +75,8 @@ content_types_accepted(Req, State) ->
   try
     #{metadata := Metadata} = trails:retrieve(Path),
     AtomMethod = method_to_atom(Method),
-    #{AtomMethod := #{consumes := Consumes}} = Metadata,
-    Handler = compose_handler_name(AtomMethod),
+    #{AtomMethod := MethodMap = #{consumes := Consumes}} = Metadata,
+    Handler = compose_handler(MethodMap, AtomMethod),
     RetList = [{iolist_to_binary(X), Handler} || X <- Consumes],
     {RetList, Req2, State}
   catch
@@ -96,8 +96,8 @@ content_types_provided(Req, State) ->
   try
     #{metadata := Metadata} = trails:retrieve(Path),
     AtomMethod = method_to_atom(Method),
-    #{AtomMethod := #{produces := Produces}} = Metadata,
-    Handler = compose_handler_name(AtomMethod),
+    #{AtomMethod := MethodMap = #{produces := Produces}} = Metadata,
+    Handler = compose_handler(MethodMap, AtomMethod),
     RetList = [{iolist_to_binary(X), Handler} || X <- Produces],
     {RetList, Req2, State}
   catch
@@ -134,6 +134,15 @@ method_to_atom(<<"PATCH">>) -> patch;
 method_to_atom(<<"PUT">>) -> put;
 method_to_atom(<<"POST">>) -> post;
 method_to_atom(<<"DELETE">>) -> delete.
+
+-spec compose_handler(map(), atom()) -> atom().
+compose_handler(Metadata, AtomMethod) ->
+  case maps:get(handler, Metadata, AtomMethod) of
+    AtomMethod ->
+      compose_handler_name(AtomMethod);
+    Else ->
+      Else
+  end.
 
 -spec compose_handler_name(get|patch|put|post) -> atom().
 compose_handler_name(get) -> handle_get;
