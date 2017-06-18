@@ -144,7 +144,7 @@ make_trails({Name, HostList}) when is_list(HostList) ->
 make_trails({Name, {Host, PathDefs}}) ->
   make_trails({Name, {Host, [], PathDefs}});
 make_trails({Name, {_Host, _Constraints, PathDefs}}) ->
-  [ make_a_trail(atom_to_list(Name), Path) || Path <- PathDefs,
+  [ make_a_trail(Name, Path) || Path <- PathDefs,
                                               path_not_wildcard(Path)].
 
 path_not_wildcard({Path, _, _}) ->
@@ -161,8 +161,8 @@ make_a_trail(Name, {Path, Module, _Options}) ->
        }
     },
   MethodData =
-    #{ tags => [Name ++ " (application)"],
-       description => Name ++ " is missing swagger definition",
+    #{ tags => [atom_to_list(Name) ++ " (application)"],
+       description => atom_to_list(Name) ++ " is missing swagger definition",
        parameters => [RequestBody],
        produces => ["text/html"],
        consumes => ["text/html"]
