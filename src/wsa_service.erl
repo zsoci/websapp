@@ -71,10 +71,7 @@ get_handlers(Server, State) ->
 
 add_trail_handlers({Server, App, TrailHandlers}, ServiceState) ->
   State = dict:fetch(Server, ServiceState),
-  #wsa_server_state{trail_handlers = TrailHandlersDict,
-                    pure_handlers  = PureHandlersDict,
-                    middlewares    = Middlewares,
-                    env            = Env} = State,
+  TrailHandlersDict = State#wsa_server_state.trail_handlers,
   OldTrailModules = case dict:find(App, TrailHandlersDict) of
                       error ->
                         [];
@@ -83,45 +80,40 @@ add_trail_handlers({Server, App, TrailHandlers}, ServiceState) ->
                     end,
   NewTModules = sets:to_list(sets:from_list(TrailHandlers ++ OldTrailModules)),
   NewTDict = dict:store(App, NewTModules, TrailHandlersDict),
-  Values = set_routes(Server, NewTDict, PureHandlersDict, Middlewares, Env),
+  NewState = State#wsa_server_state{trail_handlers = NewTDict},
+  {Values, RetState} = set_routes(Server, NewState),
   ranch:set_protocol_options(Server, Values),
-  {ok, dict:store(Server, State#wsa_server_state{ trail_handlers = NewTDict},
-                  ServiceState)}.
+  {ok, dict:store(Server, RetState, ServiceState)}.
 
 update_routes({Server, Routes}, ServiceState) ->
   State = dict:fetch(Server, ServiceState),
-  #wsa_server_state{trail_handlers = TrailHandlers,
-                    pure_handlers  = PureHandlers,
-                    middlewares    = Middlewares,
-                    env            = Env} = State,
+  PureHandlers = State#wsa_server_state.pure_handlers,
   NewPureHandlers = case Routes of
                       [] ->
                         PureHandlers;
                       UpdRoutes ->
                         dict:store(Server, UpdRoutes, PureHandlers)
                     end,
-  Values = set_routes(Server, TrailHandlers, NewPureHandlers, Middlewares, Env),
+  NewState = State#wsa_server_state{pure_handlers = NewPureHandlers},
+  {Values, RetState} = set_routes(Server, NewState),
   ranch:set_protocol_options(Server, Values),
-  {ok, dict:store(Server,
-                  State#wsa_server_state{ pure_handlers = NewPureHandlers})}.
+  {ok, dict:store(Server, RetState, ServiceState)}.
 
 start_server(ServiceState, ServerName,
-             State = #wsa_server_state{trail_handlers  = TrailHandlers,
-                                       pure_handlers   = PureHandlers,
-                                       middlewares     = Middlewares,
-                                       env             = Env,
-                                       trans_opts      = TransOpts,
+             State = #wsa_server_state{trans_opts      = TransOpts,
                                        nr_of_acceptors = Acceptors}) ->
-  ProtoOpts = set_routes(ServerName, TrailHandlers,
-                         PureHandlers, Middlewares, Env),
+  {ProtoOpts, NewState} = set_routes(ServerName, State),
   case cowboy:start_http(ServerName, Acceptors, TransOpts, ProtoOpts) of
     {ok, _} ->
-      {ok, dict:store(ServerName, State, ServiceState)};
+      {ok, dict:store(ServerName, NewState, ServiceState)};
     {error, {already_started, _}} ->
       {already_started, ServiceState}
   end.
 
-set_routes(Server, TrailDict, PureDict, Middlewares, Env) ->
+set_routes(Server, State = #wsa_server_state{ trail_handlers = TrailDict,
+                                              pure_handlers = PureDict,
+                                              middlewares = Middlewares,
+                                              env = Env}) ->
   _ = put(dummy_handlers, PureDict),
   TrailHandlers = dict:fold( fun(_, Value, AccIn) ->
                                Value ++ AccIn
@@ -129,7 +121,7 @@ set_routes(Server, TrailDict, PureDict, Middlewares, Env) ->
   TrailRoutes = trails:trails([?MODULE | TrailHandlers]),
   trails:store(Server, TrailRoutes),
   Dispatch = trails:single_host_compile(TrailRoutes),
-  [{env, [{dispatch, Dispatch} | Env]}, {middlewares, Middlewares}].
+  {[{env, [{dispatch, Dispatch} | Env]}, {middlewares, Middlewares}], State}.
   
 -spec trails() -> trails:trails().
 trails() ->
