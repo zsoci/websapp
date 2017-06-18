@@ -48,9 +48,9 @@ handle_get_ping(Req, State) ->
             end,
   Reply = case Verbose of
             true ->
-              <<"verbose pong">>;
+              <<"Verbose Pong">>;
             _ ->
-              <<"pong">>
+              <<"Pong">>
           end,
   {Reply, Req2, State}.
 
@@ -87,11 +87,13 @@ trails_ping() ->
   },
   Path = "/ping",
   Opts = #{ path => Path,
+            server => ?WSA_SERVER_REF,
             verbose => true
   },
   trails:trail(Path, ?MODULE, Opts, Metadata).
 
 trails_root() ->
+
   Metadata =
     #{ get =>
        #{ tags => ["Health Check"],
@@ -102,6 +104,7 @@ trails_root() ->
     },
   Path = "/",
   Opts = #{ path => Path,
+            server => ?WSA_SERVER_REF,
             verbose => true
          },
   trails:trail(Path, ?MODULE, Opts, Metadata).

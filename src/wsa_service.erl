@@ -83,7 +83,7 @@ add_trail_handlers({Server, App, TrailHandlers}, ServiceState) ->
                     end,
   NewTModules = sets:to_list(sets:from_list(TrailHandlers ++ OldTrailModules)),
   NewTDict = dict:store(App, NewTModules, TrailHandlersDict),
-  Values = set_routes(NewTDict, PureHandlersDict, Middlewares, Env),
+  Values = set_routes(Server, NewTDict, PureHandlersDict, Middlewares, Env),
   ranch:set_protocol_options(Server, Values),
   {ok, dict:store(Server, State#wsa_server_state{ trail_handlers = NewTDict},
                   ServiceState)}.
@@ -100,7 +100,7 @@ update_routes({Server, Routes}, ServiceState) ->
                       UpdRoutes ->
                         dict:store(Server, UpdRoutes, PureHandlers)
                     end,
-  Values = set_routes(TrailHandlers, NewPureHandlers, Middlewares, Env),
+  Values = set_routes(Server, TrailHandlers, NewPureHandlers, Middlewares, Env),
   ranch:set_protocol_options(Server, Values),
   {ok, dict:store(Server,
                   State#wsa_server_state{ pure_handlers = NewPureHandlers})}.
@@ -112,7 +112,8 @@ start_server(ServiceState, ServerName,
                                        env             = Env,
                                        trans_opts      = TransOpts,
                                        nr_of_acceptors = Acceptors}) ->
-  ProtoOpts = set_routes(TrailHandlers, PureHandlers, Middlewares, Env),
+  ProtoOpts = set_routes(ServerName, TrailHandlers,
+                         PureHandlers, Middlewares, Env),
   case cowboy:start_http(ServerName, Acceptors, TransOpts, ProtoOpts) of
     {ok, _} ->
       {ok, dict:store(ServerName, State, ServiceState)};
@@ -120,13 +121,13 @@ start_server(ServiceState, ServerName,
       {already_started, ServiceState}
   end.
 
-set_routes(TrailDict, PureDict, Middlewares, Env) ->
+set_routes(Server, TrailDict, PureDict, Middlewares, Env) ->
   _ = put(dummy_handlers, PureDict),
   TrailHandlers = dict:fold( fun(_, Value, AccIn) ->
                                Value ++ AccIn
                              end, [], TrailDict),
   TrailRoutes = trails:trails([?MODULE | TrailHandlers]),
-  trails:store(TrailRoutes),
+  trails:store(Server, TrailRoutes),
   Dispatch = trails:single_host_compile(TrailRoutes),
   [{env, [{dispatch, Dispatch} | Env]}, {middlewares, Middlewares}].
   
@@ -171,7 +172,7 @@ make_a_trail(Name, {Path, Module, _Options}) ->
        get => MethodData
     },
   Opts = #{ path => Path,
-            model => zsocimodel,
+            server => Name,
             verbose => false,
             function => login
          },
