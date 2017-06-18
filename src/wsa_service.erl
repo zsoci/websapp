@@ -37,8 +37,7 @@ init_service(_InitArgs) ->
   TransOpts = application:get_env(wsa, trans_opts, [{port, 8082}]),
   Acceptors = application:get_env(wsa, acceptors, ?DEFAULT_NR_OF_ACCEPTORS ),
   TrailHandlers = dict:store(wsa,
-                             [ cowboy_swagger_handler
-                             , wsa_healthcheck_handler
+                             [ wsa_healthcheck_handler
                              ],
                              dict:new()),
   State = #wsa_server_state{trail_handlers  = TrailHandlers,
@@ -118,7 +117,8 @@ set_routes(Server, State = #wsa_server_state{ trail_handlers = TrailDict,
   TrailHandlers = dict:fold( fun(_, Value, AccIn) ->
                                Value ++ AccIn
                              end, [], TrailDict),
-  TrailRoutes = trails:trails([?MODULE | TrailHandlers]),
+  TrailRoutes = trails:trails([?MODULE | TrailHandlers]) ++
+                cowboy_swagger_handler:trails(#{server => Server}),
   trails:store(Server, TrailRoutes),
   Dispatch = trails:single_host_compile(TrailRoutes),
   {[{env, [{dispatch, Dispatch} | Env]}, {middlewares, Middlewares}], State}.
