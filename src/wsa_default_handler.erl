@@ -7,7 +7,6 @@
 %%% Created : 25. Dec 2016 7:05 PM
 %%%-------------------------------------------------------------------
 -module(wsa_default_handler).
--author("zsoci").
 
 -include("wsa_common.hrl").
 
@@ -50,8 +49,9 @@ rest_init(Req, Opts) ->
 -spec allowed_methods(cowboy_req:req(), state()) ->
   {[binary()], cowboy_req:req(), state()}.
 allowed_methods(Req, State) ->
-  #{opts := #{path := Path}} = State,
-  #{metadata := Metadata} = trails:retrieve(Path),
+  #{opts := #{path := Path} = Opts} = State,
+  Server = maps:get(server, Opts, ?WSA_SERVER_REF),
+  #{metadata := Metadata} = trails:retrieve(Server, '_', Path),
   Methods = [atom_to_method(Method) || Method <- maps:keys(Metadata)],
   {Methods, Req, State}.
 
@@ -70,10 +70,11 @@ resource_exists(Req, State) ->
 -spec content_types_accepted(cowboy_req:req(), state()) ->
   {[{{binary(), binary(), '*'}, atom()}], cowboy_req:req(), state()}.
 content_types_accepted(Req, State) ->
-  #{opts := #{path := Path}} = State,
+  #{opts := #{path := Path} = Opts} = State,
+  Server = maps:get(server, Opts, ?WSA_SERVER_REF),
   {Method, Req2} = cowboy_req:method(Req),
   try
-    #{metadata := Metadata} = trails:retrieve(Path),
+    #{metadata := Metadata} = trails:retrieve(Server, '_', Path),
     AtomMethod = method_to_atom(Method),
     #{AtomMethod := MethodMap = #{consumes := Consumes}} = Metadata,
     Handler = compose_handler(MethodMap, AtomMethod),
@@ -91,10 +92,11 @@ content_types_accepted(Req, State) ->
 -spec content_types_provided(cowboy_req:req(), state()) ->
   {[{binary(), atom()}], cowboy_req:req(), state()}.
 content_types_provided(Req, State) ->
-  #{opts := #{path := Path}} = State,
+  #{opts := #{path := Path} = Opts} = State,
+  Server = maps:get(server, Opts, ?WSA_SERVER_REF),
   {Method, Req2} = cowboy_req:method(Req),
   try
-    #{metadata := Metadata} = trails:retrieve(Path),
+    #{metadata := Metadata} = trails:retrieve(Server, '_', Path),
     AtomMethod = method_to_atom(Method),
     #{AtomMethod := MethodMap = #{produces := Produces}} = Metadata,
     Handler = compose_handler(MethodMap, AtomMethod),
