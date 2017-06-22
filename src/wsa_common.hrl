@@ -19,6 +19,8 @@
 
 -define(SERVICE_NAME, wsa_service).
 -define(SERVICE_MODULE, wsa_service).
+-define(WSA_SERVER_REF, wsa_server).
+
 
 -type options() :: #{path => string(),
                      model => module(),

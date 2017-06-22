@@ -1,19 +1,22 @@
 -module(wsa_service).
 -behaviour(csi_server).
--compile({parse_transform, lager_transform}).
+
 -include_lib("common_test/include/ct.hrl").
+-include("wsa_common.hrl").
 
 %% General state of the service
--record(wsa_state, {trail_handlers :: list(atom()),
-                    pure_handlers :: dict:dict(),
-                    middlewares :: list(atom()),
-                    env :: proplists:proplist(),
-                    trans_opts :: proplists:proplist(),
-                    nr_of_acceptors :: pos_integer()
+-record(wsa_server_state, { trail_handlers :: list(atom()),
+                            pure_handlers :: dict:dict(),
+                            middlewares :: list(atom()),
+                            env :: proplists:proplist(),
+                            trans_opts :: proplists:proplist(),
+                            nr_of_acceptors :: pos_integer()
 }).
 
-%% Lifecycle State for every requests'
--record(wsa_session_state, {wsa_state :: #wsa_state{}}).
+%%-type wsa_state() :: dict:dict().
+%%
+%%%% Lifecycle State for every requests'
+%%-type wsa_session_state() :: dict:dict().
 
 -export([init_service/1,
          init/2,
@@ -21,40 +24,37 @@
          terminate_service/2,
          handle_call/3]).
 
--export([trails/0,
+-export([add_trail_handlers/2,
+         start_new_server/2,
+         stop_server/2,
+         trails/0,
          get_handlers/2,
          update_routes/2]).
 
--export([reset_test/0]).
-
 -define(DEFAULT_NR_OF_ACCEPTORS, 5).
--define(WSA_SERVER_REF, wsa_server).
--define(DEFAULT_MEDIA_TYPES, ["application/json"]).
--define(DEFAULT_METHODS, [<<"GET">>]).
 %% ====================================================================
 %% Behavioural functions
 %% ====================================================================
 init_service(_InitArgs) ->
-  Port = list_to_integer(application:get_env(wsa, listener_port, "8082")),
-  lager:error("Listening on port=~p", [Port]),
-  TransOpts = application:get_env(wsa, trans_opts, [{port, Port}]),
+  TransOpts = application:get_env(wsa, trans_opts, [{port, 8082}]),
   Acceptors = application:get_env(wsa, acceptors, ?DEFAULT_NR_OF_ACCEPTORS ),
-  TrailHandlers = dict:store(wsa, [ cowboy_swagger_handler,
-                                    wsa_healthcheck_handler ], dict:new()),
-  State = #wsa_state{trail_handlers  = TrailHandlers,
-                     pure_handlers   = dict:new(),
-                     middlewares     = [
-                       cowboy_router,
-                       cowboy_handler
-                     ],
-                     env             = [{compress, true}],
-                     trans_opts      = TransOpts,
-                     nr_of_acceptors = Acceptors
+  TrailHandlers = dict:store(wsa,
+                             [ wsa_healthcheck_handler
+                             ],
+                             dict:new()),
+  State = #wsa_server_state{trail_handlers  = TrailHandlers,
+                            pure_handlers   = dict:new(),
+                            middlewares     = [ cowboy_router,
+                                                cowboy_handler
+                                              ],
+                            env             = [{compress, true}],
+                            trans_opts      = TransOpts,
+                            nr_of_acceptors = Acceptors
   },
-  {ok, start_server(State)}.
+  start_server(dict:new(), ?WSA_SERVER_REF, State).
 
 init(_Args, ServiceState) ->
-  {ok, #wsa_session_state{wsa_state = ServiceState}}.
+  {ok, ServiceState}.
 
 terminate(_Reason, _State) ->
   ok.
@@ -65,42 +65,84 @@ terminate_service(_Reason, _State) ->
 %% ====================================================================
 %% Service functions
 %% ====================================================================
-get_handlers(all, State = #wsa_session_state{wsa_state = WsaState}) ->
-  {[{trail_handlers, dict:to_list(WsaState#wsa_state.trail_handlers)},
-    {cowboy_handlers, dict:to_list(WsaState#wsa_state.pure_handlers)}],
-   State}.
+get_handlers(all, State) ->
+  {dict:to_list(State), State};
+get_handlers(Server, State) ->
+  {dict:find(Server, State), State}.
 
-update_routes({App, Routes}, State = #wsa_state{trail_handlers = TrailHandlers,
-                                                pure_handlers  = PureHandlers,
-                                                middlewares    = Middlewares,
-                                                env            = Env}) ->
-  NewPureHandlers = dict:store(App, Routes, PureHandlers),
-  Values = set_routes(TrailHandlers, NewPureHandlers, Middlewares, Env),
-  ranch:set_protocol_options(?WSA_SERVER_REF, Values),
-  {ok, State#wsa_state{pure_handlers = NewPureHandlers}}.
+start_new_server({Server, TransOpts, Acceptors, TrailHandlers, App},
+                 ServiceState) ->
+  TrailHandlerDict = dict:store(App, TrailHandlers, dict:new()),
+  State = #wsa_server_state{trail_handlers  = TrailHandlerDict,
+                            pure_handlers   = dict:new(),
+                            middlewares     = [ cowboy_router,
+                                                cowboy_handler
+                                              ],
+                            env             = [{compress, true}],
+                            trans_opts      = TransOpts,
+                            nr_of_acceptors = Acceptors
+  },
+  start_server(ServiceState, Server, State).
 
-start_server(State = #wsa_state{trail_handlers  = TrailHandlers,
-                                pure_handlers   = PureHandlers,
-                                middlewares     = Middlewares,
-                                env             = Env,
-                                trans_opts      = TransOpts,
-                                nr_of_acceptors = Acceptors}) ->
-  ProtoOpts = set_routes(TrailHandlers, PureHandlers, Middlewares, Env),
-  case cowboy:start_http(?WSA_SERVER_REF, Acceptors, TransOpts, ProtoOpts) of
-    {ok, _} -> ok;
-    {error, {already_started, _}} -> ok
-  end,
-  State.
+stop_server(Server, ServiceState) ->
+  cowboy:stop_listener(Server),
+  NewState = dict:erase(Server, ServiceState),
+  {ok, NewState}.
 
-set_routes(TrailDict, PureDict, Middlewares, Env) ->
+add_trail_handlers({Server, App, TrailHandlers}, ServiceState) ->
+  State = dict:fetch(Server, ServiceState),
+  TrailHandlersDict = State#wsa_server_state.trail_handlers,
+  OldTrailModules = case dict:find(App, TrailHandlersDict) of
+                      error ->
+                        [];
+                      {ok, Value} ->
+                        Value
+                    end,
+  NewTModules = sets:to_list(sets:from_list(TrailHandlers ++ OldTrailModules)),
+  NewTDict = dict:store(App, NewTModules, TrailHandlersDict),
+  NewState = State#wsa_server_state{trail_handlers = NewTDict},
+  {Values, RetState} = set_routes(Server, NewState),
+  ranch:set_protocol_options(Server, Values),
+  {ok, dict:store(Server, RetState, ServiceState)}.
+
+update_routes({Server, Routes}, ServiceState) ->
+  State = dict:fetch(Server, ServiceState),
+  PureHandlers = State#wsa_server_state.pure_handlers,
+  NewPureHandlers = case Routes of
+                      [] ->
+                        PureHandlers;
+                      UpdRoutes ->
+                        dict:store(Server, UpdRoutes, PureHandlers)
+                    end,
+  NewState = State#wsa_server_state{pure_handlers = NewPureHandlers},
+  {Values, RetState} = set_routes(Server, NewState),
+  ranch:set_protocol_options(Server, Values),
+  {ok, dict:store(Server, RetState, ServiceState)}.
+
+start_server(ServiceState, ServerName,
+             State = #wsa_server_state{trans_opts      = TransOpts,
+                                       nr_of_acceptors = Acceptors}) ->
+  {ProtoOpts, NewState} = set_routes(ServerName, State),
+  case cowboy:start_http(ServerName, Acceptors, TransOpts, ProtoOpts) of
+    {ok, _} ->
+      {ok, dict:store(ServerName, NewState, ServiceState)};
+    {error, {already_started, _}} ->
+      {already_started, ServiceState}
+  end.
+
+set_routes(Server, State = #wsa_server_state{ trail_handlers = TrailDict,
+                                              pure_handlers = PureDict,
+                                              middlewares = Middlewares,
+                                              env = Env}) ->
   _ = put(dummy_handlers, PureDict),
   TrailHandlers = dict:fold( fun(_, Value, AccIn) ->
                                Value ++ AccIn
                              end, [], TrailDict),
-  TrailRoutes = trails:trails([?MODULE | TrailHandlers]),
-  trails:store(TrailRoutes),
+  TrailRoutes = trails:trails([?MODULE | TrailHandlers]) ++
+                cowboy_swagger_handler:trails(#{server => Server}),
+  trails:store(Server, TrailRoutes),
   Dispatch = trails:single_host_compile(TrailRoutes),
-  [{env, [{dispatch, Dispatch} | Env]}, {middlewares, Middlewares}].
+  {[{env, [{dispatch, Dispatch} | Env]}, {middlewares, Middlewares}], State}.
   
 -spec trails() -> trails:trails().
 trails() ->
@@ -115,7 +157,7 @@ make_trails({Name, HostList}) when is_list(HostList) ->
 make_trails({Name, {Host, PathDefs}}) ->
   make_trails({Name, {Host, [], PathDefs}});
 make_trails({Name, {_Host, _Constraints, PathDefs}}) ->
-  [ make_a_trail(atom_to_list(Name), Path) || Path <- PathDefs,
+  [ make_a_trail(Name, Path) || Path <- PathDefs,
                                               path_not_wildcard(Path)].
 
 path_not_wildcard({Path, _, _}) ->
@@ -131,22 +173,19 @@ make_a_trail(Name, {Path, Module, _Options}) ->
        #{ type => string
        }
     },
-  Produces = try_get_content_types(fun Module:content_types_provided/2),
-  Consumes = try_get_content_types(fun Module:content_types_accepted/2),
   MethodData =
-    #{ tags => [Name ++ " (application)"],
-       description => Name ++ " is missing swagger definition",
+    #{ tags => [atom_to_list(Name) ++ " (application)"],
+       description => atom_to_list(Name) ++ " is missing swagger definition",
        parameters => [RequestBody],
-       produces => Produces,
-       consumes => Consumes
+       produces => ["text/html"],
+       consumes => ["text/html"]
     },
-  Methods = try_get_methods(fun Module:allowed_methods/2),
-  Metadata = lists:foldl(fun(Elem, AccIn) ->
-                            maps:put(wsa_util:method_to_atom(Elem),
-                                     MethodData, AccIn)
-                         end, #{}, Methods),
+  Metadata =
+    #{
+       get => MethodData
+    },
   Opts = #{ path => Path,
-            model => zsocimodel,
+            server => Name,
             verbose => false,
             function => login
          },
@@ -157,30 +196,3 @@ handle_call({Request, Args}, _From, State) ->
              [{Request, Args}]),
   {Reply, NewState} = ?MODULE:Request(Args, State),
   {reply, Reply, NewState}.
-
-try_get_content_types(Fun) ->
-  try Fun(undef, undef) of
-    {ContentList, _, _} ->
-      [ (<< MediaType/binary, "/", SubType/binary >>)
-        || {{MediaType, SubType, _}, _} <- ContentList];
-    _ ->
-      ?DEFAULT_MEDIA_TYPES
-  catch
-      _:_ ->
-        ?DEFAULT_MEDIA_TYPES
-  end.
-
-try_get_methods(Fun) ->
-  try Fun(undef, undef) of
-    {Methods, _, _} ->
-      Methods;
-    _ ->
-      ?DEFAULT_METHODS
-  catch
-    _:_ ->
-      ?DEFAULT_METHODS
-  end.
-
-reset_test() ->
-  application:stop(ctr),
-  application:start(ctr).

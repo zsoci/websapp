@@ -26,16 +26,17 @@
           ]
         }]).
 
--export([handle_get/2
+-export([handle_get_root/2,
+         handle_get_ping/2
         ]).
 
 -export([ trails/0
         ]).
 
--spec handle_get(Req :: cowboy_req:req(), State :: fen_common:state()) ->
-  Result :: {iodata(), cowboy_req:req(), state()}.
-handle_get(Req, State) ->
-  lager:debug("Health", []),
+-spec handle_get_ping(Req :: cowboy_req:req(),
+                          State :: fen_common:state()) ->
+                           Result :: {iodata(), cowboy_req:req(), state()}.
+handle_get_ping(Req, State) ->
   {Value, Req2} = cowboy_req:qs_val(<<"verbose">>, Req, false),
   Verbose = case Value of
               <<"true">> ->
@@ -45,15 +46,27 @@ handle_get(Req, State) ->
               _ ->
                 Value
             end,
-  case Verbose of
-    true ->
-      {<<"Pong">>, Req2, State};
-    _ ->
-      {<<"Ping">>, Req, State}
-  end.
+  Reply = case Verbose of
+            true ->
+              <<"Verbose Pong">>;
+            _ ->
+              <<"Pong">>
+          end,
+  {Reply, Req2, State}.
+
+-spec handle_get_root(Req :: cowboy_req:req(),
+                          State :: fen_common:state()) ->
+                           Result :: {iodata(), cowboy_req:req(), state()}.
+handle_get_root(Req, State) ->
+  {<<"">>, Req, State}.
 
 -spec trails() -> trails:trails().
 trails() ->
+  [ trails_root()
+  , trails_ping()
+  ].
+
+trails_ping() ->
   Parameter =
   #{ name => <<"verbose">>,
      in => query,
@@ -68,12 +81,30 @@ trails() ->
      #{ tags => ["Health Check"],
         description => "Returns an empty body for load balancer",
         produces => ["text/plain"],
-        parameters => [Parameter]
+        parameters => [Parameter],
+        handler => handle_get_ping
      }
   },
   Path = "/ping",
   Opts = #{ path => Path,
+            server => ?WSA_SERVER_REF,
             verbose => true
   },
-  [trails:trail(Path, ?MODULE, Opts, Metadata)].
+  trails:trail(Path, ?MODULE, Opts, Metadata).
 
+trails_root() ->
+
+  Metadata =
+    #{ get =>
+       #{ tags => ["Health Check"],
+          description => "Returns an empty body for load balancer",
+          produces => ["text/plain"],
+          handler => handle_get_root
+       }
+    },
+  Path = "/",
+  Opts = #{ path => Path,
+            server => ?WSA_SERVER_REF,
+            verbose => true
+         },
+  trails:trail(Path, ?MODULE, Opts, Metadata).

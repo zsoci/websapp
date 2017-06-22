@@ -7,7 +7,6 @@
 %%% Created : 25. Dec 2016 7:05 PM
 %%%-------------------------------------------------------------------
 -module(wsa_default_handler).
--author("zsoci").
 
 -include("wsa_common.hrl").
 
@@ -50,8 +49,9 @@ rest_init(Req, Opts) ->
 -spec allowed_methods(cowboy_req:req(), state()) ->
   {[binary()], cowboy_req:req(), state()}.
 allowed_methods(Req, State) ->
-  #{opts := #{path := Path}} = State,
-  #{metadata := Metadata} = trails:retrieve(Path),
+  #{opts := #{path := Path} = Opts} = State,
+  Server = maps:get(server, Opts, ?WSA_SERVER_REF),
+  #{metadata := Metadata} = trails:retrieve(Server, '_', Path),
   Methods = [atom_to_method(Method) || Method <- maps:keys(Metadata)],
   {Methods, Req, State}.
 
@@ -70,13 +70,14 @@ resource_exists(Req, State) ->
 -spec content_types_accepted(cowboy_req:req(), state()) ->
   {[{{binary(), binary(), '*'}, atom()}], cowboy_req:req(), state()}.
 content_types_accepted(Req, State) ->
-  #{opts := #{path := Path}} = State,
+  #{opts := #{path := Path} = Opts} = State,
+  Server = maps:get(server, Opts, ?WSA_SERVER_REF),
   {Method, Req2} = cowboy_req:method(Req),
   try
-    #{metadata := Metadata} = trails:retrieve(Path),
+    #{metadata := Metadata} = trails:retrieve(Server, '_', Path),
     AtomMethod = method_to_atom(Method),
-    #{AtomMethod := #{consumes := Consumes}} = Metadata,
-    Handler = compose_handler_name(AtomMethod),
+    #{AtomMethod := MethodMap = #{consumes := Consumes}} = Metadata,
+    Handler = compose_handler(MethodMap, AtomMethod),
     RetList = [{iolist_to_binary(X), Handler} || X <- Consumes],
     {RetList, Req2, State}
   catch
@@ -91,13 +92,14 @@ content_types_accepted(Req, State) ->
 -spec content_types_provided(cowboy_req:req(), state()) ->
   {[{binary(), atom()}], cowboy_req:req(), state()}.
 content_types_provided(Req, State) ->
-  #{opts := #{path := Path}} = State,
+  #{opts := #{path := Path} = Opts} = State,
+  Server = maps:get(server, Opts, ?WSA_SERVER_REF),
   {Method, Req2} = cowboy_req:method(Req),
   try
-    #{metadata := Metadata} = trails:retrieve(Path),
+    #{metadata := Metadata} = trails:retrieve(Server, '_', Path),
     AtomMethod = method_to_atom(Method),
-    #{AtomMethod := #{produces := Produces}} = Metadata,
-    Handler = compose_handler_name(AtomMethod),
+    #{AtomMethod := MethodMap = #{produces := Produces}} = Metadata,
+    Handler = compose_handler(MethodMap, AtomMethod),
     RetList = [{iolist_to_binary(X), Handler} || X <- Produces],
     {RetList, Req2, State}
   catch
@@ -134,6 +136,15 @@ method_to_atom(<<"PATCH">>) -> patch;
 method_to_atom(<<"PUT">>) -> put;
 method_to_atom(<<"POST">>) -> post;
 method_to_atom(<<"DELETE">>) -> delete.
+
+-spec compose_handler(map(), atom()) -> atom().
+compose_handler(Metadata, AtomMethod) ->
+  case maps:get(handler, Metadata, AtomMethod) of
+    AtomMethod ->
+      compose_handler_name(AtomMethod);
+    Else ->
+      Else
+  end.
 
 -spec compose_handler_name(get|patch|put|post) -> atom().
 compose_handler_name(get) -> handle_get;
