@@ -25,6 +25,8 @@
          handle_call/3]).
 
 -export([add_trail_handlers/2,
+         start_new_server/2,
+         stop_server/2,
          trails/0,
          get_handlers/2,
          update_routes/2]).
@@ -67,6 +69,25 @@ get_handlers(all, State) ->
   {dict:to_list(State), State};
 get_handlers(Server, State) ->
   {dict:find(Server, State), State}.
+
+start_new_server({Server, TransOpts, Acceptors, TrailHandlers, App},
+                 ServiceState) ->
+  TrailHandlerDict = dict:store(App, TrailHandlers, dict:new()),
+  State = #wsa_server_state{trail_handlers  = TrailHandlerDict,
+                            pure_handlers   = dict:new(),
+                            middlewares     = [ cowboy_router,
+                                                cowboy_handler
+                                              ],
+                            env             = [{compress, true}],
+                            trans_opts      = TransOpts,
+                            nr_of_acceptors = Acceptors
+  },
+  start_server(ServiceState, Server, State).
+
+stop_server(Server, ServiceState) ->
+  cowboy:stop_listener(Server),
+  NewState = dict:erase(Server, ServiceState),
+  {ok, NewState}.
 
 add_trail_handlers({Server, App, TrailHandlers}, ServiceState) ->
   State = dict:fetch(Server, ServiceState),

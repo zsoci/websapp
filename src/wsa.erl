@@ -14,6 +14,8 @@
          add_trail_handlers/3,
          get_handlers/0,
          get_handlers/1,
+         start_server/5,
+         stop_server/1,
          update_routes/1,
          update_routes/2]).
 
@@ -42,6 +44,19 @@ get_handlers() ->
 
 get_handlers(Server) ->
   csi:call_s(?SERVICE_NAME, get_handlers, Server).
+
+-spec start_server(Server :: atom(),
+                   TransOpt :: proplists:proplist(),
+                   Acceptors :: pos_integer(),
+                   TrailHandlers :: list(atom()),
+                   App :: atom()) ->
+  ok | {error, Reason :: any()}.
+start_server(Server, TransOpt, Acceptors, TrailHandlers, App) ->
+  csi:call(?SERVICE_NAME, start_new_server,
+           {Server, TransOpt, Acceptors, TrailHandlers, App}).
+
+stop_server(Server) ->
+  csi:call(?SERVICE_NAME, stop_server, Server).
 
 update_routes(Routes) ->
   case application:get_application() of
