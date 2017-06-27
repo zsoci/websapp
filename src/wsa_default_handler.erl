@@ -101,9 +101,11 @@ content_types_provided(Req, State) ->
     #{AtomMethod := MethodMap = #{produces := Produces}} = Metadata,
     Handler = compose_handler(MethodMap, AtomMethod),
     RetList = [{iolist_to_binary(X), Handler} || X <- Produces],
+    io:format("HAHO:~p", [RetList]),
     {RetList, Req2, State}
   catch
     _:_ ->
+      io:format("Cactched**************"),
       {[{<<"application/json">>, handle_get}], Req, State}
   end.
 

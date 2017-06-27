@@ -38,6 +38,7 @@
                            Result :: {iodata(), cowboy_req:req(), state()}.
 handle_get_ping(Req, State) ->
   {Value, Req2} = cowboy_req:qs_val(<<"verbose">>, Req, false),
+  {MediaType, Req3} = cowboy_req:header(<<"accept">>, Req2),
   Verbose = case Value of
               <<"true">> ->
                 true;
@@ -46,13 +47,24 @@ handle_get_ping(Req, State) ->
               _ ->
                 Value
             end,
+  handle_get_ping_with_media_type(MediaType, Verbose, Req3, State).
+
+handle_get_ping_with_media_type(<<"text/plain">>, Verbose, Req, State) ->
   Reply = case Verbose of
             true ->
               <<"Verbose Pong">>;
             _ ->
               <<"Pong">>
           end,
-  {Reply, Req2, State}.
+  {Reply, Req, State};
+handle_get_ping_with_media_type(<<"application/json">>, Verbose, Req, State) ->
+  Reply = case Verbose of
+            true ->
+              [{<<"response">>, <<"Verbose Pong">>}];
+            _ ->
+              [{<<"response">>, <<"Pong">>}]
+          end,
+  {jsx:encode(Reply), Req, State}.
 
 -spec handle_get_root(Req :: cowboy_req:req(),
                           State :: fen_common:state()) ->
@@ -80,9 +92,24 @@ trails_ping() ->
   #{ get =>
      #{ tags => ["Health Check"],
         description => "Returns an empty body for load balancer",
-        produces => ["text/plain"],
+        produces => ["text/plain", "application/json"],
         parameters => [Parameter],
-        handler => handle_get_ping
+        handler => handle_get_ping,
+        responses =>
+        #{ <<"200">> =>
+           #{ description => "Document returned",
+              schema =>
+              #{ type => object,
+                 properties =>
+                 #{ response =>
+                    #{ type => string,
+                       description => "Pong message"
+                    }
+                 }
+              }
+           }
+        }
+
      }
   },
   Path = "/ping",
@@ -93,13 +120,17 @@ trails_ping() ->
   trails:trail(Path, ?MODULE, Opts, Metadata).
 
 trails_root() ->
-
   Metadata =
     #{ get =>
        #{ tags => ["Health Check"],
           description => "Returns an empty body for load balancer",
           produces => ["text/plain"],
-          handler => handle_get_root
+          handler => handle_get_root,
+          responses =>
+          #{ <<"200">> =>
+             #{ description => "OK"
+             }
+          }
        }
     },
   Path = "/",

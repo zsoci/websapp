@@ -1,6 +1,6 @@
 {application, wsa, [
 	{description, "Web Service Applciation"},
-	{vsn, "0.0.1"},
+	{vsn, git},
 	{id, "git"},
 	{modules, []},
 	{registered, []},
