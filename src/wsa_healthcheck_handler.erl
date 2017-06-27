@@ -109,7 +109,6 @@ trails_ping() ->
               }
            }
         }
-
      }
   },
   Path = "/ping",
