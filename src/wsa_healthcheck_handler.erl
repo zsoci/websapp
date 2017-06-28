@@ -64,7 +64,9 @@ handle_get_ping_with_media_type(<<"application/json">>, Verbose, Req, State) ->
             _ ->
               [{<<"response">>, <<"Pong">>}]
           end,
-  {jsx:encode(Reply), Req, State}.
+  {jsx:encode(Reply), Req, State};
+handle_get_ping_with_media_type(_, Verbose, Req, State) ->
+  handle_get_ping_with_media_type(<<"text/plain">>, Verbose, Req, State).
 
 -spec handle_get_root(Req :: cowboy_req:req(),
                           State :: fen_common:state()) ->
