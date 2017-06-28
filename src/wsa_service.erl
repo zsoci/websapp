@@ -138,8 +138,8 @@ set_routes(Server, State = #wsa_server_state{ trail_handlers = TrailDict,
   TrailHandlers = dict:fold( fun(_, Value, AccIn) ->
                                Value ++ AccIn
                              end, [], TrailDict),
-  TrailRoutes = trails:trails([?MODULE | TrailHandlers]) ++
-                cowboy_swagger_handler:trails(#{server => Server}),
+  TrailRoutes = cowboy_swagger_handler:trails(#{server => Server}) ++
+                trails:trails([?MODULE | TrailHandlers]),
   trails:store(Server, TrailRoutes),
   Dispatch = trails:single_host_compile(TrailRoutes),
   {[{env, [{dispatch, Dispatch} | Env]}, {middlewares, Middlewares}], State}.
